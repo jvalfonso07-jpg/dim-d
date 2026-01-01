@@ -75,8 +75,8 @@ export default function ChatRoom() {
       const overlap = myInterests.filter((myTag: string) => 
         partnerInterests.some((theirTag: string) => clean(theirTag) === clean(myTag))
       )
-      // Check matched_tag
-      if (session.matched_tag && !overlap.some(t => clean(t) === clean(session.matched_tag))) {
+      // Check matched_tag (Fixed type error here)
+      if (session.matched_tag && !overlap.some((t: string) => clean(t) === clean(session.matched_tag))) {
         overlap.push(session.matched_tag)
       }
       setCommonTags(overlap)
