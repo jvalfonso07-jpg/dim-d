@@ -1,7 +1,17 @@
 export function isShopOpen(): boolean {
-  // Get current time in Philippines (Asia/Manila)
+  // DEV MODE: Always return true so we can test
+  return true;
+
+  /* // ORIGINAL LOGIC (Uncomment this before you launch!)
   const now = new Date();
-  const options = { timeZone: 'Asia/Manila', hour: 'numeric', hour12: false };
+  
+  // FIX: Added 'as const' to tell TypeScript these strings are strict option values
+  const options = { 
+    timeZone: 'Asia/Manila', 
+    hour: 'numeric', 
+    hour12: false 
+  } as const; 
+
   const formatter = new Intl.DateTimeFormat([], options);
   
   try {
@@ -14,4 +24,5 @@ export function isShopOpen(): boolean {
     console.error("Time check failed", e);
     return true; 
   }
+  */
 }
