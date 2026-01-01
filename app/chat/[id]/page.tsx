@@ -53,43 +53,39 @@ export default function ChatRoom() {
       if (!user) return router.push('/')
       setUser(user)
 
-      // 1. Get My Profile & Tags
       const { data: myProfile } = await supabase.from('profiles').select('interests').eq('id', user.id).single()
       const myInterests = myProfile?.interests || []
       setMyTags(myInterests)
 
-      // 2. Get Session
       const { data: session } = await supabase.from('chat_sessions').select('*').eq('id', id).single()
+      
       if (!session || session.status === 'ended') {
         return router.push('/lobby')
       }
+      
       setSessionData(session)
 
-      // 3. Get Partner Profile
       const partnerId = session.user_a_id === user.id ? session.user_b_id : session.user_a_id
       const { data: partnerProfile } = await supabase.from('profiles').select('*').eq('id', partnerId).single()
       setPartner(partnerProfile)
 
-      // 4. CALCULATE COMMON TAGS (ROBUST)
+      // CALCULATE COMMON TAGS
       const partnerInterests = partnerProfile?.interests || []
-      
-      // Normalize string helper (remove case/space differences)
       const clean = (str: string) => str?.toLowerCase().trim() || ''
-
-      // Find ALL tags in my list that exist in their list
       const overlap = myInterests.filter((myTag: string) => 
         partnerInterests.some((theirTag: string) => clean(theirTag) === clean(myTag))
       )
-      
+      // Check matched_tag
+      if (session.matched_tag && !overlap.some(t => clean(t) === clean(session.matched_tag))) {
+        overlap.push(session.matched_tag)
+      }
       setCommonTags(overlap)
 
-      // 5. Get Messages
       const { data: existingMsgs } = await supabase.from('messages').select('*').eq('session_id', id).order('created_at', { ascending: true })
       if (existingMsgs) setMessages(existingMsgs)
 
       checkMatchStatus(session)
 
-      // 6. Listeners
       const channel = supabase
         .channel(`session:${id}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `session_id=eq.${id}` }, 
@@ -176,10 +172,11 @@ export default function ChatRoom() {
 
         let query = supabase.from('queue').select('*').neq('user_id', myId)
         
-        // Prevent matching with the current partner again immediately
+        // --- BULLETPROOF: PREVENT IMMEDIATE RE-MATCH ---
         if (partner?.id) {
             query = query.neq('user_id', partner.id)
         }
+        // ----------------------------------------------
         
         const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()
         query = query.gt('created_at', twoMinutesAgo)
@@ -260,9 +257,10 @@ export default function ChatRoom() {
     setShowTagsModal(false)
   }
 
+  // --- RENDERING: SEARCHING OVERLAY (FULL SCREEN) ---
   if (isSearching) {
     return (
-        <div className="flex flex-col h-screen bg-background text-white items-center justify-center space-y-6">
+        <div className="flex flex-col h-[100dvh] bg-background text-white items-center justify-center space-y-6">
             <div className="relative">
                 <div className="w-16 h-16 border-4 border-gold border-t-transparent rounded-full animate-spin"></div>
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -280,14 +278,16 @@ export default function ChatRoom() {
     )
   }
 
-  if (!partner) return <div className="text-white p-10 bg-background h-screen">Connecting...</div>
+  if (!partner) return <div className="text-white p-10 bg-background h-[100dvh]">Connecting...</div>
 
   const minutes = Math.floor((timeLeft || 0) / 60)
   const seconds = (timeLeft || 0) % 60
   const timeString = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`
 
   return (
-    <div className="flex flex-col h-screen bg-background text-white relative">
+    // FIX: Changed h-screen to h-[100dvh] for mobile browsers
+    // FIX: Added overflow-hidden to prevent body scrolling
+    <div className="flex flex-col h-[100dvh] bg-background text-white relative overflow-hidden">
         
         {/* --- TAGS MODAL --- */}
         {showTagsModal && (
@@ -373,9 +373,9 @@ export default function ChatRoom() {
         )}
 
         {/* --- MAIN CHAT UI --- */}
-        <div className="flex-col h-screen bg-background text-white relative flex">
+        <div className="flex-col h-full w-full relative flex">
             
-            <div className="h-16 border-b border-border flex items-center justify-between px-4 bg-surface z-20 relative">
+            <div className="h-16 border-b border-border flex items-center justify-between px-4 bg-surface z-20 relative shrink-0">
                 <div className="flex items-center gap-3">
                     <button onClick={handleBack} className="text-gray-400 hover:text-white mr-1">
                         <ArrowLeft size={20} />
@@ -393,6 +393,7 @@ export default function ChatRoom() {
                 </div>
                 
                 <div className="flex items-center gap-3">
+                    {/* ONLY SHOW TIMER IF ACTIVE */}
                     {status === 'active' && (
                         <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${timeLeft && timeLeft < 10 ? 'border-red-500 text-red-500 animate-pulse' : 'border-gold/50 text-gold'}`}>
                             <span className="font-mono text-sm">{timeString}</span>
@@ -447,7 +448,7 @@ export default function ChatRoom() {
                 <div ref={messagesEndRef} />
             </div>
 
-            <div className="p-3 bg-surface border-t border-border z-20 relative">
+            <div className="p-3 bg-surface border-t border-border z-20 relative shrink-0 safe-bottom">
                 {status === 'active' ? (
                     <form onSubmit={sendMessage} className="flex gap-2">
                         <button 
