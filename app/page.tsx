@@ -53,7 +53,7 @@ export default function LoginPage() {
                 <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-gold"></div>
                 <div className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-gold"></div>
 
-                <p className="font-serif text-3xl text-gold mb-6 italic">"Eyes wide shut."</p>
+                <p className="font-serif text-3xl text-gold mb-6 italic">"Eyes Wide Shut."</p>
                 <div className="h-px w-16 bg-border mx-auto mb-6"></div>
                 <div className="text-gray-500 font-light text-sm leading-relaxed space-y-1">
                     <p>Doors open strictly at <span className="text-white">8:00 PM</span>.</p>
