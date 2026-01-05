@@ -59,23 +59,32 @@ export default function ChatRoom() {
 
       const { data: session } = await supabase.from('chat_sessions').select('*').eq('id', id).single()
       
+      // SECURITY: If session ended, kick to Lobby (Prevent "Back" button re-entry)
       if (!session || session.status === 'ended') {
         return router.push('/lobby')
       }
       
       setSessionData(session)
 
-      const partnerId = session.user_a_id === user.id ? session.user_b_id : session.user_a_id
+      // --- FIX: RESTORE VOTE STATE (Prevent Limbo) ---
+      // If we are reloading the page, check if I already voted
+      const isUserA = session.user_a_id === user.id
+      const mySavedVote = isUserA ? session.user_a_vote : session.user_b_vote
+      if (mySavedVote) {
+        setMyVote(mySavedVote)
+      }
+      // -----------------------------------------------
+
+      const partnerId = isUserA ? session.user_b_id : session.user_a_id
       const { data: partnerProfile } = await supabase.from('profiles').select('*').eq('id', partnerId).single()
       setPartner(partnerProfile)
 
-      // CALCULATE COMMON TAGS
+      // Calculate Common Tags
       const partnerInterests = partnerProfile?.interests || []
       const clean = (str: string) => str?.toLowerCase().trim() || ''
       const overlap = myInterests.filter((myTag: string) => 
         partnerInterests.some((theirTag: string) => clean(theirTag) === clean(myTag))
       )
-      // Check matched_tag (Fixed type error here)
       if (session.matched_tag && !overlap.some((t: string) => clean(t) === clean(session.matched_tag))) {
         overlap.push(session.matched_tag)
       }
@@ -145,7 +154,9 @@ export default function ChatRoom() {
     }
   }
 
+  // --- AUTOMATIC DISCONNECT ON BACK BUTTON ---
   const handleBack = async () => {
+    // Force disconnect if active/voting to clean up state
     if (status === 'active' || status === 'voting') {
         await handleVote('no')
     }
@@ -171,12 +182,8 @@ export default function ChatRoom() {
         await supabase.from('queue').insert({ user_id: myId })
 
         let query = supabase.from('queue').select('*').neq('user_id', myId)
-        
-        // --- BULLETPROOF: PREVENT IMMEDIATE RE-MATCH ---
-        if (partner?.id) {
-            query = query.neq('user_id', partner.id)
-        }
-        // ----------------------------------------------
+        // Prevent matching with current partner immediately
+        if (partner?.id) query = query.neq('user_id', partner.id)
         
         const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()
         query = query.gt('created_at', twoMinutesAgo)
@@ -257,10 +264,9 @@ export default function ChatRoom() {
     setShowTagsModal(false)
   }
 
-  // --- RENDERING: SEARCHING OVERLAY (FULL SCREEN) ---
   if (isSearching) {
     return (
-        <div className="flex flex-col h-[100dvh] bg-background text-white items-center justify-center space-y-6">
+        <div className="flex flex-col h-screen bg-background text-white items-center justify-center space-y-6">
             <div className="relative">
                 <div className="w-16 h-16 border-4 border-gold border-t-transparent rounded-full animate-spin"></div>
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -285,8 +291,6 @@ export default function ChatRoom() {
   const timeString = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`
 
   return (
-    // FIX: Changed h-screen to h-[100dvh] for mobile browsers
-    // FIX: Added overflow-hidden to prevent body scrolling
     <div className="flex flex-col h-[100dvh] bg-background text-white relative overflow-hidden">
         
         {/* --- TAGS MODAL --- */}
@@ -329,7 +333,7 @@ export default function ChatRoom() {
                         <img src={partner.real_photo_url} className="w-full h-full object-cover pointer-events-none" />
                         <div className="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent p-6 pt-20 pointer-events-none">
                             <h1 className="font-serif text-3xl italic text-white">{partner.nickname}</h1>
-                            {/* Height removed from partner display as well since requested */}
+                            {/* Height removed */}
                             <p className="text-xs text-gold uppercase tracking-widest mb-1">{partner.gender}</p>
                             <p className="text-sm text-gray-300 italic">"{partner.bio}"</p>
                             <div className="flex flex-wrap gap-2 mt-3">
@@ -382,7 +386,6 @@ export default function ChatRoom() {
                     </button>
 
                     <div className="w-10 h-10 rounded-full bg-[#333] border border-gold/30 overflow-hidden relative">
-                        {/* BLUR FIX: blur-[2px] is subtle enough to see there's a pic but obscures details */}
                         <img src={partner.real_photo_url} className="w-full h-full object-cover blur-[2px] scale-110 opacity-80" />
                     </div>
                     <div>
@@ -393,7 +396,6 @@ export default function ChatRoom() {
                 </div>
                 
                 <div className="flex items-center gap-3">
-                    {/* ONLY SHOW TIMER IF ACTIVE */}
                     {status === 'active' && (
                         <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${timeLeft && timeLeft < 10 ? 'border-red-500 text-red-500 animate-pulse' : 'border-gold/50 text-gold'}`}>
                             <span className="font-mono text-sm">{timeString}</span>

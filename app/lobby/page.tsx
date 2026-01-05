@@ -154,7 +154,7 @@ export default function Lobby() {
               user_b_id: matchedUserId,
               status: 'active',
               matched_tag: commonTag,
-              expires_at: new Date(Date.now() + 30 * 1000).toISOString()
+              expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString()
             })
             .select()
             .single()
