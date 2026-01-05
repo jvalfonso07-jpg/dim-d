@@ -43,7 +43,7 @@ export default function LoginPage() {
         
         <div className="max-w-md w-full text-center space-y-12 mt-12">
             <div>
-                <h1 className="text-8xl italic font-serif font-bold text-white mb-2 tracking-tight">dim.</h1>
+                <h1 className="text-8xl italic font-serif font-bold text-white mb-2 tracking-tight">Dim.</h1>
                 <p className="text-gold-dim tracking-[0.2em] text-[10px] uppercase mt-4">The Private Club for Conversation</p>
             </div>
 
