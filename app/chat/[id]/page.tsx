@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { Send, Heart, X, Square, AlertCircle, Plus, Loader2, ArrowLeft, Tag } from 'lucide-react'
+import { Send, Heart, X, Square, AlertCircle, Plus, Loader2, ArrowLeft, Tag, Flag } from 'lucide-react'
 
 type Message = {
   id: string
@@ -29,6 +29,11 @@ export default function ChatRoom() {
   
   const [isSearching, setIsSearching] = useState(false)
   const [showTagsModal, setShowTagsModal] = useState(false)
+  
+  // REPORT STATE
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportReason, setReportReason] = useState('')
+  
   const [myTags, setMyTags] = useState<string[]>([])
   const [commonTags, setCommonTags] = useState<string[]>([]) 
   const [customTag, setCustomTag] = useState('')
@@ -59,27 +64,17 @@ export default function ChatRoom() {
 
       const { data: session } = await supabase.from('chat_sessions').select('*').eq('id', id).single()
       
-      // SECURITY: If session ended, kick to Lobby (Prevent "Back" button re-entry)
       if (!session || session.status === 'ended') {
         return router.push('/lobby')
       }
       
       setSessionData(session)
 
-      // --- FIX: RESTORE VOTE STATE (Prevent Limbo) ---
-      // If we are reloading the page, check if I already voted
-      const isUserA = session.user_a_id === user.id
-      const mySavedVote = isUserA ? session.user_a_vote : session.user_b_vote
-      if (mySavedVote) {
-        setMyVote(mySavedVote)
-      }
-      // -----------------------------------------------
-
-      const partnerId = isUserA ? session.user_b_id : session.user_a_id
+      const partnerId = session.user_a_id === user.id ? session.user_b_id : session.user_a_id
       const { data: partnerProfile } = await supabase.from('profiles').select('*').eq('id', partnerId).single()
       setPartner(partnerProfile)
 
-      // Calculate Common Tags
+      // CALCULATE COMMON TAGS
       const partnerInterests = partnerProfile?.interests || []
       const clean = (str: string) => str?.toLowerCase().trim() || ''
       const overlap = myInterests.filter((myTag: string) => 
@@ -154,15 +149,33 @@ export default function ChatRoom() {
     }
   }
 
-  // --- AUTOMATIC DISCONNECT ON BACK BUTTON ---
   const handleBack = async () => {
-    // Force disconnect if active/voting to clean up state
     if (status === 'active' || status === 'voting') {
         await handleVote('no')
     }
     router.push('/lobby')
   }
 
+  // --- REPORT LOGIC ---
+  const submitReport = async () => {
+    if (!reportReason) return alert("Select a reason")
+    
+    // Send report to DB
+    await supabase.from('reports').insert({
+        reporter_id: user.id,
+        reported_user_id: partner.id,
+        reason: reportReason,
+        details: `Session ID: ${id}`
+    })
+
+    // End chat immediately
+    alert("Report submitted. Disconnecting for safety.")
+    await handleVote('no')
+    setStatus('ended')
+    setShowReportModal(false)
+  }
+
+  // --- NEW MATCHING LOGIC ---
   const handleNextPerson = async () => {
     if (!user) return
     setIsSearching(true)
@@ -182,7 +195,6 @@ export default function ChatRoom() {
         await supabase.from('queue').insert({ user_id: myId })
 
         let query = supabase.from('queue').select('*').neq('user_id', myId)
-        // Prevent matching with current partner immediately
         if (partner?.id) query = query.neq('user_id', partner.id)
         
         const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString()
@@ -293,6 +305,35 @@ export default function ChatRoom() {
   return (
     <div className="flex flex-col h-[100dvh] bg-background text-white relative overflow-hidden">
         
+        {/* --- REPORT MODAL --- */}
+        {showReportModal && (
+            <div className="absolute inset-0 z-50 bg-black/95 flex items-center justify-center p-6 backdrop-blur-md">
+                <div className="bg-surface border border-red-900 p-6 rounded-lg w-full max-w-sm space-y-6">
+                    <h3 className="text-red-500 font-bold uppercase tracking-widest text-sm flex items-center gap-2">
+                        <AlertCircle size={16} /> Report User
+                    </h3>
+                    <p className="text-xs text-gray-400">This will end the chat and flag this user for review.</p>
+                    
+                    <div className="space-y-2">
+                        {['Harassment / Bullying', 'Spam / Bot', 'Inappropriate Photo', 'Underage', 'Other'].map(r => (
+                            <button 
+                                key={r} 
+                                onClick={() => setReportReason(r)}
+                                className={`w-full text-left p-3 text-xs border rounded ${reportReason === r ? 'border-red-500 text-white bg-red-900/20' : 'border-border text-gray-500 hover:border-gray-500'}`}
+                            >
+                                {r}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="flex gap-2">
+                        <button onClick={() => setShowReportModal(false)} className="flex-1 py-3 border border-border text-gray-500 text-xs uppercase rounded hover:text-white">Cancel</button>
+                        <button onClick={submitReport} className="flex-1 py-3 bg-red-600 text-white text-xs uppercase font-bold rounded hover:bg-red-700">Submit Report</button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* --- TAGS MODAL --- */}
         {showTagsModal && (
             <div className="absolute inset-0 z-50 bg-black/90 flex items-center justify-center p-6">
@@ -333,7 +374,6 @@ export default function ChatRoom() {
                         <img src={partner.real_photo_url} className="w-full h-full object-cover pointer-events-none" />
                         <div className="absolute bottom-0 w-full bg-gradient-to-t from-black via-black/80 to-transparent p-6 pt-20 pointer-events-none">
                             <h1 className="font-serif text-3xl italic text-white">{partner.nickname}</h1>
-                            {/* Height removed */}
                             <p className="text-xs text-gold uppercase tracking-widest mb-1">{partner.gender}</p>
                             <p className="text-sm text-gray-300 italic">"{partner.bio}"</p>
                             <div className="flex flex-wrap gap-2 mt-3">
@@ -396,6 +436,13 @@ export default function ChatRoom() {
                 </div>
                 
                 <div className="flex items-center gap-3">
+                    {/* REPORT BUTTON */}
+                    {status === 'active' && (
+                        <button onClick={() => setShowReportModal(true)} className="text-gray-600 hover:text-red-500">
+                            <Flag size={16} />
+                        </button>
+                    )}
+
                     {status === 'active' && (
                         <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${timeLeft && timeLeft < 10 ? 'border-red-500 text-red-500 animate-pulse' : 'border-gold/50 text-gold'}`}>
                             <span className="font-mono text-sm">{timeString}</span>

@@ -10,14 +10,12 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
 
-  // Check login & time
   useEffect(() => {
     setIsOpen(isShopOpen())
 
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        // If logged in, check if they have a profile
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
@@ -45,12 +43,11 @@ export default function LoginPage() {
         
         <div className="max-w-md w-full text-center space-y-12 mt-12">
             <div>
-                <h1 className="text-8xl italic font-serif font-bold text-white mb-2 tracking-tight">Dim.</h1>
+                <h1 className="text-8xl italic font-serif font-bold text-white mb-2 tracking-tight">dim.</h1>
                 <p className="text-gold-dim tracking-[0.2em] text-[10px] uppercase mt-4">The Private Club for Conversation</p>
             </div>
 
             <div className="border border-border p-10 bg-surface relative mx-4">
-                {/* Decorative Corners */}
                 <div className="absolute top-0 left-0 w-2 h-2 border-t border-l border-gold"></div>
                 <div className="absolute top-0 right-0 w-2 h-2 border-t border-r border-gold"></div>
                 <div className="absolute bottom-0 left-0 w-2 h-2 border-b border-l border-gold"></div>
@@ -75,7 +72,11 @@ export default function LoginPage() {
                       {loading ? 'Verifying...' : 'Enter the Lobby'}
                     </span>
                 </button>
-                <p className="text-[10px] text-zinc-700 uppercase tracking-widest mt-6">By entering, you agree to the Code.</p>
+                
+                {/* DISCREET LEGAL FOOTER */}
+                <p className="text-[10px] text-zinc-600 mt-6 max-w-xs mx-auto leading-relaxed">
+                  By entering, you agree to our <span className="underline hover:text-gold cursor-pointer">Terms of Service</span>, <span className="underline hover:text-gold cursor-pointer">Privacy Policy</span>, and <span className="underline hover:text-gold cursor-pointer">Code of Conduct</span>.
+                </p>
             </div>
         </div>
     </div>
